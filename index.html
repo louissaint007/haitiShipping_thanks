@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,10 +8,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #cf0921; /* MonCash Red-ish tone */
+            --primary-color: #cf0921;
+            /* MonCash Red-ish tone */
             --primary-hover: #a8071a;
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-            --card-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            --card-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             --text-color: #2d3436;
             --text-secondary: #636e72;
         }
@@ -132,21 +134,22 @@
             background-color: #f2d74e;
             animation: fall 3s linear infinite;
         }
-
     </style>
 </head>
+
 <body>
 
     <div class="card">
         <div class="icon-container">
             <svg class="checkmark" viewBox="0 0 52 52">
-                <path d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                <path d="M14.1 27.2l7.1 7.2 16.7-16.8" />
             </svg>
         </div>
-        
+
         <h1>Paiement Confirmé !</h1>
-        <p>Merci pour votre confiance. Votre transaction a été traitée avec succès et votre colis est en cours de préparation.</p>
-        
+        <p>Merci pour votre confiance. Votre transaction a été traitée avec succès et votre colis est en cours de
+            préparation.</p>
+
         <a href="#" id="app-link" class="btn">Retourner vers l'application</a>
 
         <div class="footer">
@@ -154,17 +157,99 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // Configuration
-        // Note: Remplacez l'URL ci-dessous par votre schéma d'URL réel plus tard
-        const APP_DEEP_LINK = "votre-app-scheme://success"; 
-        
-        document.getElementById('app-link').addEventListener('click', function(e) {
-            // Optionnel : Tentative de redirection directe
+        // Configuration Supabase
+        const supabaseUrl = 'https://xjeebxlmlhlejyjzygap.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhqZWVieGxtbGhsZWp5anp5Z2FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1Njc1NDAsImV4cCI6MjA4NTE0MzU0MH0.jEPUvqtytP3GdD-3Wwzn9kfcEht1BL-ngRfwyz8RTxU';
+        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        const APP_DEEP_LINK = "votre-app-scheme://success";
+
+        async function recordPayment() {
+            // Extraction des paramètres de l'URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const transactionId = urlParams.get('transactionId') || urlParams.get('transaction_id');
+            const orderId = urlParams.get('orderId') || urlParams.get('order_id');
+
+            // Si pas d'ID de transaction, on ne fait rien (accès direct à la page ?)
+            if (!transactionId || !orderId) {
+                console.log("Aucun paramètre de transaction trouvé.");
+                return;
+            }
+
+            console.log(`Traitement de la commande: ${orderId}, Transaction: ${transactionId}`);
+
+            try {
+                // 1. Vérifier si la transaction existe déjà
+                const { data: existingPayment, error: fetchError } = await supabase
+                    .from('payments')
+                    .select('id')
+                    .eq('order_id', orderId)
+                    .single();
+
+                if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
+                    console.error("Erreur lors de la vérification:", fetchError);
+                    document.querySelector('h1').innerText = "Erreur de vérification";
+                    document.querySelector('p').innerText = "Une erreur est survenue lors de la vérification de votre paiement.";
+                    return;
+                }
+
+                if (existingPayment) {
+                    console.log("Paiement déjà enregistré.");
+                    // Déjà enregistré, on update juste le statut si nécessaire ou on laisse
+                    const { error: updateError } = await supabase
+                        .from('payments')
+                        .update({
+                            moncash_transaction_id: transactionId,
+                            status: 'COMPLETED', // On assume que si on est redirigé ici, c'est un succès
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('order_id', orderId);
+
+                    if (updateError) console.error("Erreur update:", updateError);
+                } else {
+                    console.log("Nouveau paiement, tentative d'insertion...");
+                    // Note: 'amount_htg' est NOT NULL dans le schéma. 
+                    // Si MonCash ne le renvoie pas dans l'URL de retour, il faudra une valeur par défaut ou le récupérer autrement.
+                    // Pour l'instant on met 0 ou on essaie de le lire des params.
+                    const amount = parseFloat(urlParams.get('amount')) || 0;
+
+                    const { error: insertError } = await supabase
+                        .from('payments')
+                        .insert([
+                            {
+                                order_id: orderId,
+                                moncash_transaction_id: transactionId,
+                                amount_htg: amount,
+                                status: 'COMPLETED',
+                                payment_method: 'MONCASH',
+                                payload: { raw_params: Object.fromEntries(urlParams) } // Sauvegarde tout pour debug
+                            }
+                        ]);
+
+                    if (insertError) {
+                        console.error("Erreur insertion:", insertError);
+                        document.querySelector('h1').innerText = "Erreur d'enregistrement";
+                        document.querySelector('p').innerText = "Nous avons reçu votre paiement mais n'avons pas pu l'enregistrer automatiquement. Veuillez contacter le support.";
+                    } else {
+                        console.log("Paiement enregistré avec succès !");
+                    }
+                }
+
+            } catch (err) {
+                console.error("Exception inattendue:", err);
+            }
+        }
+
+        // Exécuter au chargement
+        recordPayment();
+
+        document.getElementById('app-link').addEventListener('click', function (e) {
+            // Redirection vers l'app
             // window.location.href = APP_DEEP_LINK;
         });
-
-        console.log("Paiement confirmé via MonCash. Page prête pour intégration.");
     </script>
 </body>
+
 </html>
