@@ -7,8 +7,8 @@ import { createClient } from '@supabase/supabase-js';
  * project_url -> URL de Supabase
  * anon_public_key -> Clé publique
  */
-const supabaseUrl = import.meta.env.PROJECT_URL || import.meta.env.project_url;
-const supabaseAnonKey = import.meta.env.ANON_PUBLIC_KEY || import.meta.env.anon_public_key;
+const supabaseUrl = import.meta.env.VITE_PROJECT_URL || import.meta.env.project_url;
+const supabaseAnonKey = import.meta.env.VITE_ANON_PUBLIC_KEY || import.meta.env.anon_public_key;
 
 // Initialisation unique
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
