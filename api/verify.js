@@ -92,30 +92,47 @@ export default async function handler(request, response) {
         }
 
         // 4. Update/Insert into Supabase
-        // We use the service role key so we can write to the table regardless of RLS
+        // Check if exists by MonCash Transaction ID OR by Order ID
+        // Priority: MonCash Transaction ID (confirmed match), then Order ID (pending match)
 
-        // Check if exists first
-        const { data: existing } = await supabase
+        let existing = null;
+
+        // First check by MonCash Transaction ID (most specific)
+        const { data: existingByTx } = await supabase
             .from('payments')
             .select('id')
             .eq('moncash_transaction_id', transactionId)
             .single();
 
+        if (existingByTx) {
+            existing = existingByTx;
+        } else {
+            // If not found by Tx ID, check by Order ID
+            const { data: existingByOrder } = await supabase
+                .from('payments')
+                .select('id')
+                .eq('order_id', finalOrderId)
+                .single();
+            if (existingByOrder) {
+                existing = existingByOrder;
+            }
+        }
+
         let dbResult;
 
         if (existing) {
-            // Update
+            // Update existing record
             dbResult = await supabase
                 .from('payments')
                 .update({
-                    status: 'COMPLETED', // Or allow moncash status mapping
+                    moncash_transaction_id: transactionId, // Ensure this is set
+                    status: 'COMPLETED',
                     payload: moncashPayment,
                     updated_at: new Date().toISOString()
                 })
-                .eq('moncash_transaction_id', transactionId);
+                .eq('id', existing.id);
         } else {
-            // Insert - assuming we have orderId from the query params to link it
-            // If we don't have orderId, we can still record it but it might be orphaned
+            // Insert new record
             dbResult = await supabase
                 .from('payments')
                 .insert({
