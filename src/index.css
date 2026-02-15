@@ -1,12 +1,7 @@
-:root {
-    --primary-color: #cf0921;
-    /* MonCash Red-ish tone */
-    --primary-hover: #a8071a;
-    --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-    --card-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-    --text-color: #2d3436;
-    --text-secondary: #636e72;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 
 * {
     margin: 0;
