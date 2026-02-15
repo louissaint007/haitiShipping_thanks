@@ -94,7 +94,7 @@ export default async function handler(request, response) {
                 .from('payments')
                 .update({
                     status: 'COMPLETED', // Or allow moncash status mapping
-                    moncash_response: moncashPayment,
+                    payload: moncashPayment,
                     updated_at: new Date().toISOString()
                 })
                 .eq('moncash_transaction_id', transactionId);
@@ -109,7 +109,7 @@ export default async function handler(request, response) {
                     amount_htg: moncashPayment.cost,
                     status: 'COMPLETED',
                     payment_method: 'MONCASH',
-                    moncash_response: moncashPayment,
+                    payload: moncashPayment,
                     created_at: new Date().toISOString()
                 });
         }
