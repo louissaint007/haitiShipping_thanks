@@ -76,6 +76,21 @@ export default async function handler(request, response) {
         // Verify payment status (e.g. if it is 'successful' or 'completed')
         // note: MonCash message might be "successful"
 
+        // Try to get orderId from query params or MonCash reference
+        // MonCash 'reference' field often contains the internal order ID
+        const finalOrderId = orderId || moncashPayment.reference;
+
+        if (!finalOrderId) {
+            console.warn("Order ID is missing in both query params and MonCash reference.");
+            // We can't insert into payments without order_id due to schema constraint.
+            // We could either return an error or try to find a way to handle this.
+            // For now, let's return a specific error so we know what's happening.
+            return response.status(400).json({
+                error: 'Order ID not found',
+                details: 'Could not determine Order ID from URL or MonCash reference.'
+            });
+        }
+
         // 4. Update/Insert into Supabase
         // We use the service role key so we can write to the table regardless of RLS
 
@@ -104,7 +119,7 @@ export default async function handler(request, response) {
             dbResult = await supabase
                 .from('payments')
                 .insert({
-                    order_id: orderId || null,
+                    order_id: finalOrderId,
                     moncash_transaction_id: transactionId,
                     amount_htg: moncashPayment.cost,
                     status: 'COMPLETED',
